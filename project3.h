@@ -9,6 +9,7 @@
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
+#include <memory.h>
 
 /*
  * given an input string, encrypt/decrypt it and save it to the output string. string lengths are fixed length.
@@ -18,13 +19,14 @@ int do_encrypt_string(char *in, char *out, unsigned char *key, int do_encrypt) {
     unsigned char inbuf[1024], outbuf[1024 + EVP_MAX_BLOCK_LENGTH];
     int inlen, outlen;
     EVP_CIPHER_CTX *ctx;
+//    memcpy(inbuf, in, 16);
     /*
      * Bogus key and IV: we'd normally set these from
      * another source.
      */
 //    unsigned char key[] = "0123456789abcdef";
-    unsigned char iv[17];
-    memset(&iv, 0, 17);
+//    unsigned char iv[17];
+//    memset(&iv, 0, 17);
 
     /* Don't set key or IV right away; we want to check lengths */
     ctx = EVP_CIPHER_CTX_new();
@@ -34,9 +36,9 @@ int do_encrypt_string(char *in, char *out, unsigned char *key, int do_encrypt) {
 //    OPENSSL_assert(EVP_CIPHER_CTX_iv_length(ctx) == 16);
 
     /* Now we can set key and IV */
-    EVP_CipherInit_ex(ctx, NULL, NULL, key, iv, do_encrypt);
+    EVP_CipherInit_ex(ctx, NULL, NULL, key, NULL , do_encrypt);
 
-    if (!EVP_CipherUpdate(ctx, out, BUF_LENGTH, in, BUF_LENGTH)) {
+    if (!EVP_CipherUpdate(ctx, outbuf, &outlen, inbuf, BUF_LENGTH)) {
         /* Error */
         EVP_CIPHER_CTX_free(ctx);
         return 1;
@@ -53,7 +55,7 @@ int do_encrypt_string(char *in, char *out, unsigned char *key, int do_encrypt) {
 //        }
 //        fwrite(outbuf, 1, (size_t) outlen, out);
 //    }
-    if (!EVP_CipherFinal_ex(ctx, out, BUF_LENGTH)) {
+    if (!EVP_CipherFinal_ex(ctx, out, &outlen)) {
         /* Error */
         EVP_CIPHER_CTX_free(ctx);
         return 1;
