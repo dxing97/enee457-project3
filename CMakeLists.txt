@@ -7,5 +7,8 @@ include_directories(/usr/local/Cellar/openssl/1.0.2p/include)
 include_directories(/usr/local/ssl/include)
 
 
-add_executable(enee457-project3 main.c)
-target_link_libraries(enee457-project3 crypto)
+add_executable(GenTable.out GenTable.c)
+target_link_libraries(GenTable.out crypto)
+
+add_executable(Crack Crack.c Crack.c project3.h)
+target_link_libraries(Crack crypto)
