@@ -223,6 +223,8 @@ int verify_plaintext(unsigned char *plaintext, int n) {
 
 /*
  * given an input string, encrypt/decrypt it and save it to the output
+ * in: key for AES-128
+ * out: encrypted AES-128 string
  * string. string lengths are fixed length.
  */
 int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
@@ -246,14 +248,16 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
         EVP_CIPHER_CTX_free(ctx);
         return 0;
     }
-
-    if (!EVP_CipherFinal_ex(ctx, out, &outlen)) {
-        /* Error */
-        EVP_CIPHER_CTX_free(ctx);
-        return 0;
-    }
-
+// there are no partials here that we need to worry about
 //    printf("result length plaintext bytes: %d\n", outlen);
+//
+//    if (!EVP_CipherFinal_ex(ctx, out, &outlen)) {
+//        /* Error */
+//        EVP_CIPHER_CTX_free(ctx);
+//        return 0;
+//    }
+
+    printf("result length plaintext bytes: %d\n", outlen);
 
     EVP_CIPHER_CTX_free(ctx);
 
