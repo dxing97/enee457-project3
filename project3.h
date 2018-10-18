@@ -34,20 +34,31 @@ int generate_chain(struct table *table, int n, struct table_entry *chain);
 int search_table(struct table *table, int n, unsigned const char *target);
 int reduce(int n, unsigned char *out, unsigned const char *hash);
 int generate_random_plaintext(int n, unsigned char *plaintext);
+int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
-
-
-/*
- * returns 0 if the plaintext is valid, 1 if not valid
- * the first 128-n bits of plaintext must be 0
- */
-int verify_plaintext(unsigned char *plaintext, int n) ;
+int str2hex(char *out, char *in);
 
 int import_table() {
     return 0;
 }
 
+/*
+ * save rainbow table to disk
+ */
 int export_table(struct table *table, char *filename) {
+    char buffer[512];
+    FILE *fp;
+    fp = fopen(filename, "w");
+
+    for(int i = 0; i < table->tablelength; i++) {
+        str2hex(buffer, table->entries[i].head);
+        fwrite(buffer, 1, strlen(buffer), fp);
+        fputc(',', fp);
+        str2hex(buffer, table->entries[i].tail);
+        fwrite(buffer, 1, strlen(buffer), fp);
+        fputc('\n', fp);
+    }
+
     return 0;
 }
 
@@ -90,8 +101,6 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
         found = search_table(table, n, current);
         switch(found) {
             case 1:
-//                break;
-
             case 2:
 //                generate_random_plaintext(n, current);
 //                strcpy(head, current);
@@ -112,10 +121,11 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
 //                break;
         }
     }
+//    tail = current;
     if(repeated == 1)
         printf("repeated at chainlength %d", location);
     strncpy(chain->head, head, 16);
-    strncpy(chain->tail, tail, 16);
+    strncpy(chain->tail, current, 16);
 
     return hashcount;
 }
@@ -198,7 +208,7 @@ int generate_random_plaintext(int n, unsigned char *plaintext) {
  * returns 0 if the plaintext is valid, 1 if not valid
  * the first 128-n bits of plaintext must be 0
  */
-int verify_plaintext(unsigned char *plaintext, int n) {
+int verify_plaintext(unsigned const char *plaintext, int n) {
     int tmp;
     if(n == 128) {
         return 0;
@@ -263,6 +273,19 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 
     hashcount++;
     return hashcount;
+}
+
+/*
+ * convert the 16 byte char array into a 33 byte ASCII hex array
+ */
+int str2hex(char *out, char *in) {
+    int i;
+    for(i = 0; i < 32; i++) {
+//        out[i] = (i % 2 ? in[i/2] >> 4 : in[i/2] & (char) 0x0F);
+        sprintf(&out[i], "%X", (i % 2 ? in[i/2] & (char) 0x0F : in[i/2] >> 4 ));
+    }
+    out[32] = '\0';
+    return 0;
 }
 
 int do_crypt(FILE *in, FILE *out, int do_encrypt)

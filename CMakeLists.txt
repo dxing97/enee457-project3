@@ -6,8 +6,11 @@ set(CMAKE_C_STANDARD 99)
 include_directories(/usr/local/Cellar/openssl/1.0.2p/include)
 include_directories(/usr/local/ssl/include)
 
-add_executable(GenTable GenTable.c)
+add_executable(GenTable GenTable.c project3.h)
 target_link_libraries(GenTable crypto)
 
-add_executable(Crack Crack.c Crack.c project3.h)
+add_executable(Crack Crack.c project3.h)
 target_link_libraries(Crack crypto)
+
+add_executable(test tests.c project3.h)
+target_link_libraries(test crypto)
