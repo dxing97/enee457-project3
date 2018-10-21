@@ -92,9 +92,13 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
     int found;
     int repeated = 0, location;
     unsigned char head[16], current[16], current_hash[16], tail[16];
+    unsigned char tmp[33];
 
     generate_random_plaintext(n, current);
-    strcpy(head, current);
+    memcpy(head, current, 16);
+
+    str2hex(tmp, head);
+//    printf("head: %s\n", tmp);
 
     while(chainlength < (1 <<n /2)) {
 //        printf("chainlength: %d\n", chainlength);
@@ -109,6 +113,8 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
 //                printf("found repeated element in table");
                 if(repeated == 0)
                     location = chainlength;
+                str2hex(tmp, current);
+//                printf("repeated: %s\n", tmp);
                 repeated = 1;
             case 0:
                 hashcount = hash(current_hash, current, 1);
@@ -122,10 +128,13 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
         }
     }
 //    tail = current;
+
+    str2hex(tmp, current);
+//    printf("tail: %s\n", tmp);
     if(repeated == 1)
         printf("repeated at chainlength %d", location);
-    strncpy(chain->head, head, 16);
-    strncpy(chain->tail, current, 16);
+    memcpy(chain->head, head, 16);
+    memcpy(chain->tail, current, 16);
 
     return hashcount;
 }
@@ -138,13 +147,20 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
  * 2 - found in tail
  */
 int search_table(struct table *table, int n, unsigned const char *target) {
+    char tmp1[33], tmp2[33];
+    str2hex(tmp2, target);
+
     for(int i = 0; i < table->tablelength; i++) {
-        if(strncmp(target, table->entries[i].head, 128/8) == 0){
-//            printf("repeat at head pos %d", i);
+        if(memcmp(target, table->entries[i].head, 128/8) == 0){
+//            str2hex(tmp1, table->entries[i].head);
+//            printf("found duplicate of %s in %s at entry %d head\n", tmp2, tmp1, i);
+            printf("repeat at head pos %d", i);
             return 1;
         }
-        if(strncmp(target, table->entries[i].tail, 128/8) == 0) {
-//            printf("repeat at tail pos %d", i);
+        if(memcmp(target, table->entries[i].tail, 128/8) == 0) {
+//            str2hex(tmp1, table->entries[i].head);
+//            printf("found duplicate of %s in %s at entry %d tail\n", tmp2, tmp1, i);
+            printf("repeat at tail pos %d", i);
             return 2;
         }
     }
@@ -267,7 +283,7 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 //        return 0;
 //    }
 
-    printf("result length plaintext bytes: %d\n", outlen);
+//    printf("result length plaintext bytes: %d\n", outlen);
 
     EVP_CIPHER_CTX_free(ctx);
 

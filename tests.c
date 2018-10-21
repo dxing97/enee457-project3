@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
     generate_random_plaintext(n, tmp1);
     verify_plaintext(tmp1, n);
     str2hex(tmp2, tmp1);
-
+//    srand(3);
     printf("randomly generated string: %s\n", tmp2);
 
     hash(tmp2, tmp1, 1);
@@ -28,7 +28,25 @@ int main(int argc, char *argv[]) {
     verify_plaintext(tmp1, n);
     str2hex(tmp2, tmp1);
 
-    printf("reduced hash: %s", tmp2);
+    printf("reduced hash: %s\n", tmp2);
+
+//    generate_random_plaintext(n, tmp1);
+//    verify_plaintext(tmp1, n);
+//    str2hex(tmp2, tmp1);
+//    srand(3);
+//    printf("randomly generated string: %s\n", tmp2);
+
+    hash(tmp1, tmp2, 1);
+//    verify_plaintext(tmp2, n);
+    str2hex(tmp2, tmp1);
+
+    printf("hashed password: %s\n", tmp2);
+
+    reduce(n, tmp2, tmp1);
+    verify_plaintext(tmp2, n);
+    str2hex(tmp1, tmp2);
+
+    printf("reduced hash: %s\n", tmp1);
 
 
 
