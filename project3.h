@@ -38,7 +38,8 @@ int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
 int str2hex(char *out, char *in);
 
-int import_table() {
+int import_table(struct table *table, char *filename) {
+
     return 0;
 }
 
@@ -51,11 +52,13 @@ int export_table(struct table *table, char *filename) {
     fp = fopen(filename, "w");
 
     for(int i = 0; i < table->tablelength; i++) {
-        str2hex(buffer, table->entries[i].head);
-        fwrite(buffer, 1, strlen(buffer), fp);
+//        str2hex(buffer, table->entries[i].head);
+//        fwrite(buffer, 1, strlen(buffer), fp);
+        fwrite(table->entries[i].head, 1, 16, fp);
         fputc(',', fp);
-        str2hex(buffer, table->entries[i].tail);
-        fwrite(buffer, 1, strlen(buffer), fp);
+//        str2hex(buffer, table->entries[i].tail);
+//        fwrite(buffer, 1, strlen(buffer), fp);
+        fwrite(table->entries[i].tail, 1, 16, fp);
         fputc('\n', fp);
     }
 
