@@ -31,12 +31,14 @@ int import_table();
 int export_table();
 int generate_table(struct table *table, int n);
 int generate_chain(struct table *table, int n, struct table_entry *chain);
-int search_table(struct table *table, int n, unsigned const char *target);
+int search_table(struct table *table, int n, char *plaintext, char *hash);
+int search_table_endpoints(struct table *table, int n, unsigned const char *target);
 int reduce(int n, unsigned char *out, unsigned const char *hash);
 int generate_random_plaintext(int n, unsigned char *plaintext);
 int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
-int str2hex(char *out, char *in);
+int bin2hex(char *out, char *in);
+int hex2bin(char *out, char *in);
 
 int import_table(struct table *table, char *filename) {
 
@@ -52,11 +54,11 @@ int export_table(struct table *table, char *filename) {
     fp = fopen(filename, "w");
 
     for(int i = 0; i < table->tablelength; i++) {
-//        str2hex(buffer, table->entries[i].head);
+//        bin2hex(buffer, table->entries[i].head);
 //        fwrite(buffer, 1, strlen(buffer), fp);
         fwrite(table->entries[i].head, 1, 16, fp);
         fputc(',', fp);
-//        str2hex(buffer, table->entries[i].tail);
+//        bin2hex(buffer, table->entries[i].tail);
 //        fwrite(buffer, 1, strlen(buffer), fp);
         fwrite(table->entries[i].tail, 1, 16, fp);
         fputc('\n', fp);
@@ -100,12 +102,12 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
     generate_random_plaintext(n, current);
     memcpy(head, current, 16);
 
-    str2hex(tmp, head);
+    bin2hex(tmp, head);
 //    printf("head: %s\n", tmp);
 
     while(chainlength < (1 <<n /2)) {
 //        printf("chainlength: %d\n", chainlength);
-        found = search_table(table, n, current);
+        found = search_table_endpoints(table, n, current);
         switch(found) {
             case 1:
             case 2:
@@ -116,7 +118,7 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
 //                printf("found repeated element in table");
                 if(repeated == 0)
                     location = chainlength;
-                str2hex(tmp, current);
+                bin2hex(tmp, current);
 //                printf("repeated: %s\n", tmp);
                 repeated = 1;
             case 0:
@@ -132,7 +134,7 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
     }
 //    tail = current;
 
-    str2hex(tmp, current);
+    bin2hex(tmp, current);
 //    printf("tail: %s\n", tmp);
     if(repeated == 1)
         printf("repeated at chainlength %d", location);
@@ -143,25 +145,36 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
 }
 
 /*
- * given a plaintext, find if it's already in the table.
+ * given a hash, search through the rainbow table.
+ *
+ * if the plaintext hash of the password is found, save the plaintext in "plaintext" and return 0
+ * otherwise, do not touch "plaintext" and return 1
+ */
+int search_table(struct table *table, int n, char *plaintext, char *hash) {
+
+    return 0;
+}
+
+/*
+ * given a plaintext, find if it's already in the table's endpoints (head/tail)
  * return values:
  * 0 - not found in table
  * 1 - found in head
  * 2 - found in tail
  */
-int search_table(struct table *table, int n, unsigned const char *target) {
+int search_table_endpoints(struct table *table, int n, unsigned const char *target) {
     char tmp1[33], tmp2[33];
-    str2hex(tmp2, target);
+    bin2hex(tmp2, target);
 
     for(int i = 0; i < table->tablelength; i++) {
         if(memcmp(target, table->entries[i].head, 128/8) == 0){
-//            str2hex(tmp1, table->entries[i].head);
+//            bin2hex(tmp1, table->entries[i].head);
 //            printf("found duplicate of %s in %s at entry %d head\n", tmp2, tmp1, i);
             printf("repeat at head pos %d", i);
             return 1;
         }
         if(memcmp(target, table->entries[i].tail, 128/8) == 0) {
-//            str2hex(tmp1, table->entries[i].head);
+//            bin2hex(tmp1, table->entries[i].head);
 //            printf("found duplicate of %s in %s at entry %d tail\n", tmp2, tmp1, i);
             printf("repeat at tail pos %d", i);
             return 2;
@@ -297,13 +310,29 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 /*
  * convert the 16 byte char array into a 33 byte ASCII hex array
  */
-int str2hex(char *out, char *in) {
+int bin2hex(char *out, char *in) {
     int i;
     for(i = 0; i < 32; i++) {
 //        out[i] = (i % 2 ? in[i/2] >> 4 : in[i/2] & (char) 0x0F);
         sprintf(&out[i], "%X", (i % 2 ? in[i/2] & (char) 0x0F : in[i/2] >> 4 ));
     }
     out[32] = '\0';
+    return 0;
+}
+
+int hex2bin(char *out, char *in) {
+    int i;
+    long k;
+    if(strlen(in) != BUF_LENGTH*2) {
+        printf("hex2bin: ASCII hex string has incorrect length (%d)", (int) (strlen(in)));
+        return 1;
+    }
+
+    for (int j = 0; j < 32; j++) {
+        k = strtol( (char[]) {in[j], 0}, NULL, 16);
+        out[j/2] = (char) ((j % 2) ? (k) : (k << 4)); //if even or odd...
+    }
+
     return 0;
 }
 
