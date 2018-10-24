@@ -5,10 +5,6 @@
 
 
 /*
- * do_encrypt:
- *  1 - encrypt
- *  0 - decrypt
- *  -1 - do nothing
  *
  * table entry format:
  * {16 byte head} {16 byte tail},\n

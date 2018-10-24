@@ -7,6 +7,10 @@
 
 #define BUF_LENGTH 16
 
+//#define USE_RAINBOW_CHAIN
+#define USE_MSB_REDUCTION
+//#define IGNORE_DUPLICATES
+
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
 #include <memory.h>
@@ -37,7 +41,8 @@ int generate_chain(struct table *table, int n, struct table_entry *chain);
 int search_table(struct table *table, int n, char *plaintext, char *inputhash);
 int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location);
 int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash);
-int reduce(int n, unsigned char *out, unsigned const char *hash);
+int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex);
+int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex);
 int generate_random_plaintext(int n, unsigned char *plaintext);
 int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
@@ -117,8 +122,8 @@ int generate_table(struct table *table, int n) {
 //        bin2hex(tmp, table->entries[table->tablelength].head);
 //        printf("head: %s\n", tmp);
         table->tablelength++;
-        if(table->tablelength % 64 == 0) {
-            printf("\rgenerate_table: progress %2.1f%%", (float) 100 * table->tablelength / (float) (1 << n/2));
+        if(table->tablelength % 4 == 0) {
+            printf("\rgenerate_table: progress %2.4f%%", (float) 100 * table->tablelength / (float) (1 << n/2));
             fflush(stdout);
         }
     }
@@ -153,7 +158,14 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
                 //collided with a tail, stop the chain here?
             case 0:
                 hashcount = hash(current_hash, current, 1);
-                reduce(n, current, current_hash);
+#ifndef USE_RAINBOW_CHAIN
+                reduce(n, current, current_hash, 0);
+#else
+                reduce(n, current, current_hash, chainlength + 1);
+#endif
+//                bin2hex(tmp, current);
+//                printf("plaintext: %s\n", tmp);
+
                 chainlength++;
                 break;
             default:
@@ -161,12 +173,19 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
         }
     }
 //    tail = current;
-    bin2hex(tmp, current);
+//    bin2hex(tmp, current);
 //    printf("tail: %s\n", tmp);
 //    if(repeated == 1)
 //        printf("repeated at chainlength %d", location);
 //    memcpy(chain->head, head, 16);
     memcpy(chain->tail, current, 16);
+#ifndef IGNORE_DUPLICATES
+    found = search_table_endpoints(table, n, chain->tail, NULL, NULL);
+    if(found == 2) {
+        //collision at tail, should redo
+        generate_chain(table, n, chain);
+    }
+#endif
 
     return hashcount;
 }
@@ -183,26 +202,40 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
     memcpy(current_hash, inputhash, 16);
 
     for(i = 0; i < (1 << n/2); i++) {
-        reduce(n, current_plaintext, current_hash);
+#ifndef USE_RAINBOW_CHAIN
+        reduce(n, current_plaintext, current_hash, 0);
+#else
+        j = (1 << n/2);
+//        tmp = j - i;
+        reduce(n, current_plaintext, inputhash, j - i);
+        for(j = (1 << n/2); j > (1 << n/2) - i; j--){
+            hash(current_hash, current_plaintext, 1);
+            reduce(n, current_plaintext, current_hash, j - i);
+        }
+#endif
         bin2hex(tmp, current_plaintext);
-//        printf("searching for %s\n", tmp);
+        printf("searching for %s\n", tmp);
         j = search_table_endpoints(table, n, current_plaintext, &index, &loc);
         switch(j) {
             case 2: //found at tail
                 //search the chain
-                printf("found matching tail, searching chain\n");
+                printf("search_table: plaintext %s at chain index %d matches tail at %d, searching chain\n", tmp, i, index);
                 if(!search_chain(&(table->entries[i]), n, final_plaintext, inputhash)) {
                     printf("search_table: found password from chain at table index %d\n", i);
                     memcpy(plaintext, final_plaintext, 16);
                     return 0;
                 }
+                break;
             case 1:
-                printf("search_table: found matching head, ignoring\n");
+                printf("search_table: plaintext %s at chain index %d matches head at %d, ignoring\n", tmp, i, index);
+                break;
             case 0:
             default:
                 break;
         }
+#ifndef USE_RAINBOW_CHAIN
         hash(current_hash, current_plaintext, 1);
+#endif
     }
     return 1;
 }
@@ -266,7 +299,11 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash
             memcpy(plaintext, currentplaintext, 16);
             return 0;
         }
-        reduce(n, currentplaintext, currenthash);
+#ifndef USE_RAINBOW_CHAIN
+        reduce(n, currentplaintext, currenthash, 0);
+#else
+        reduce(n, currentplaintext, currenthash, i + 1);
+#endif
         hash(currenthash, currentplaintext, 1);
     }
     printf("search_chain: did not find matching hash in chain\n");
@@ -276,55 +313,96 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash
  * take the input hash and reduce it back into the password space
  * todo: add position-based reduction
  */
-int reduce(int n, unsigned char *out, unsigned const char *hash) {
+int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex) {
     //naive approach: mod by 2^n
-    memset(out, 0, 16);
+    if(chainindex == 0) {
+        memset(out, 0, 16);
+#ifndef USE_MSB_REDUCTION
+        for (int i = 0; i < 16; i++) {
+            if (i < 16 - n / 8) {
+                out[i] = 0;
+            } else if ((n / 4 % 2 == 1) && (i == 16 - n / 8)) {
+                out[i] = hash[i] & (unsigned char) 0x0F;
+            } else {
+                out[i] = hash[i];
+
+            }
+        }
+#else
+        for (int i = 0; i < 16; i++) {
+            if (i < 16 - n / 8) {
+                out[i] = 0;
+            } else if ((n / 4 % 2 == 1) && (i == 16 - n / 8)) {
+                out[i] = hash[16-i] & (unsigned char) 0x0F;
+            } else {
+                out[i] = hash[16-i];
+
+            }
+        }
+#endif
+        if (verify_plaintext(out, n)) {
+            printf("error with reduction function\n");
+            return 2;
+        }
+//        char tmp[33];
+//        bin2hex(tmp, out);
+//        printf("(%d) reduction: %s\n",n,  tmp);
+        return 0;
+    } else {
+        new_reduce(n, out, hash, chainindex);
+    }
+}
+/*
+ * chainindex: position in the rainbow chain we're reducing this hash for, starts at 1 and ends at 1 << n/2 (add one)
+ * unique (hopefully) reduction function at every position in the chain
+ */
+int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
+    if(chainindex > (1 << n/2)) {
+        printf("new_reduce: chainindex (%d) is greater than 2^n/2 - 1 (%d)", chainindex, (1 << n/2) - 1);
+        return 1;
+    }
+
+    int cp = 0, o, tmp; //current position and offset in half-bytes (4 bits)
+//    printf("chainindex: %d\n", chainindex);
+
+    srand((unsigned) chainindex); //srand(0) is the same as srand(1)
+    unsigned char extracts[n/4];
+    int offsets[n/4];
+
+    for(int i = 0; i < n/4; i++) {
+        cp = (rand() % 32);
+//        cp = (cp + o) % 32;
+//        printf("%02d", cp);
+        offsets[i] = cp;
+
+        if(cp % 2 == 1) { //extracting LSBs
+            extracts[i] = hash[cp/2] & (unsigned char) 0x0F;
+        } else { //extracting MSBs
+            extracts[i] = hash[cp/2] >> 4;
+        }
+//        printf(("(%X),"), extracts[i]);
+    }
+//    printf("\n");
+    int remainingextracts = n/4;
     for(int i = 0; i < 16 ; i++) {
         if (i < 16 - n / 8) {
             out[i] = 0;
         } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
-            out[i] = hash[i]  & (unsigned char) 0x0F;
+            out[i] = (unsigned char) extracts[n/4-remainingextracts] & (unsigned char) 0x0F;
+            remainingextracts--;
         } else {
-            out[i] = hash[i];
-
+            out[i] = (extracts[n/4 - remainingextracts] << 4) | extracts[n/4 - remainingextracts + 1];
+            remainingextracts -= 2;
         }
     }
-//    for(int i = 16-n/8-1; i < 16; i++) {
-//        out[i] = hash[i];
-//    }
-//
-//    int diff = n - (n/8)*8;
-//    if(diff) {
-//        out[15-n/8] = hash[15-n/8] & (unsigned char) (((1 << diff) - 1));
-//
-//    }
-
-    if(verify_plaintext(out, n)){
-        printf("error with reduction function\n");
-        return 2;
+    if(remainingextracts != 0) {
+        printf("remainingextracts != 0\n");
+    }
+    if(verify_plaintext(out, n) != 0) {
+        printf("new_reduce: generated invalid plaintext\n");
+        return 1;
     }
     return 0;
-}
-
-int new_reduce(struct table_entry *entry, int n, char *plaintext, char *hash, unsigned int chainposition) {
-    int cp = 0, o; //current position and offset
-    srand(chainposition);
-    char extract;
-    for(int i = 0; i < n/4; i++) {
-        cp += ((rand() % n) / 4);
-
-        if(cp/4 % 2) { //extracting odd
-            extract = hash[cp/8] & (char) 0x0F;
-        } else { //extracting even
-            extract = hash[cp/8] >> 4;
-        }
-        if(i % 2) { //odd i
-
-        } else { //even i
-
-        }
-//        plaintext[i] = (i % 2) ? () : (hash[o/2] () ? () : ());
-    }
 }
 
 
@@ -333,6 +411,7 @@ int new_reduce(struct table_entry *entry, int n, char *plaintext, char *hash, un
  * requirements for the password
  */
 int generate_random_plaintext(int n, unsigned char *plaintext) {
+    srand(my_getrandom());
     for(int i = 0; i < 16 ; i++) {
         if (i < 16 - n / 8) {
             plaintext[i] = 0;
@@ -381,9 +460,16 @@ int verify_plaintext(unsigned const char *plaintext, int n) {
  * in: key for AES-128
  * out: encrypted AES-128 string
  * string. string lengths are fixed length.
+ * do_encrypt:
+ *  1 - encrypt
+ *  0 - decrypt
+ *  -1 - do nothing
  */
 int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
     static int hashcount = 0; //project requirement
+    if(do_encrypt == -1) {
+        return hashcount;
+    }
     unsigned char plaintext[16];
     memset(&plaintext, 0, 16);
     int outlen;

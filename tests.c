@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     printf("hashed password: %s\n", tmp1);
 
-    reduce(n, tmp1, tmp2);
+    reduce(n, tmp1, tmp2, 0);
     verify_plaintext(tmp1, n);
     bin2hex(tmp2, tmp1);
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 
     printf("hashed password: %s\n", tmp2);
 
-    reduce(n, tmp2, tmp1);
+    reduce(n, tmp2, tmp1, 0);
     verify_plaintext(tmp2, n);
     bin2hex(tmp1, tmp2);
 
@@ -66,22 +66,39 @@ int main(int argc, char *argv[]) {
     char challengehash[] = "b8a1c2b0affbf389d6f0fc0584ccefb2";
     printf("challenge hash: %s\n", challengehash);
     hex2bin(tmp1, challengehash);
-    reduce(n, tmp2, tmp1);
+    reduce(n, tmp2, tmp1, 0);
     bin2hex(tmp3, tmp2);
     printf("reduced hash: %s\n", tmp3);
     hash(tmp1, tmp2, 1);
     bin2hex(tmp3, tmp1);
     printf("hash: %s\n", tmp3);
 
-    reduce(n, tmp2, tmp1);
+    reduce(n, tmp2, tmp1, 0);
     bin2hex(tmp3, tmp2);
     printf("reduced hash: %s\n", tmp3);
     hash(tmp1, tmp2, 1);
     bin2hex(tmp3, tmp1);
     printf("hash: %s\n", tmp3);
 
+    hex2bin(tmp2, challengehash);
+    new_reduce(n, tmp1, tmp2, 23);
+    bin2hex(tmp3, tmp1);
+    printf("new_reduce of challengehash: %s\n", tmp3);
 
-
+    /*
+     * all permutations are unique
+     */
+    int tmp;
+    int offsets[1<<n/2][n/4];
+    for(int i = 0; i < 1 << n/2; i++) {
+        srand(i);
+        for(int j = 0; j < n/4; j++) {
+            tmp = rand() % 32;
+            offsets[i][j] = tmp;
+            printf("%2d ", tmp);
+        }
+        printf("\n");
+    }
 
     return 0;
 }
