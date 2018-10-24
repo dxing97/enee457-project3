@@ -22,6 +22,8 @@ int main(int argc, char *argv[]){
     int n = atoi(argv[1]);
     printf("n: %d\n", n);
     struct table table;
+    table.tablelength = 1 << n/2;
+    table.entries = calloc((size_t) table.tablelength, sizeof(struct table_entry));
     import_table(&table, "rainbow");
 
     //import h(p), where h(p) is a ASCII-encoded hex string

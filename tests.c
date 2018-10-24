@@ -17,8 +17,8 @@
  * test a bunch of different functions in project3.h
  */
 int main(int argc, char *argv[]) {
-    unsigned char tmp1[33], tmp2[33];
-    int n = 28;
+    unsigned char tmp1[33], tmp2[33], tmp3[33];
+    int n = 24;
 
     generate_random_plaintext(n, tmp1);
     verify_plaintext(tmp1, n);
@@ -56,7 +56,30 @@ int main(int argc, char *argv[]) {
 
     printf("reduced hash: %s\n", tmp1);
 
-    printf("my_getrandom: %d", my_getrandom());
+    printf("my_getrandom: %d\n", my_getrandom());
+
+//    struct table table;
+//    table.tablelength = 1 << n/2;
+//    table.entries = calloc((size_t) 1 << n/2, sizeof(struct table_entry));
+//    import_table(&table, "rainbow");
+//    export_table(&table, "testrainbow");
+    char challengehash[] = "b8a1c2b0affbf389d6f0fc0584ccefb2";
+    printf("challenge hash: %s\n", challengehash);
+    hex2bin(tmp1, challengehash);
+    reduce(n, tmp2, tmp1);
+    bin2hex(tmp3, tmp2);
+    printf("reduced hash: %s\n", tmp3);
+    hash(tmp1, tmp2, 1);
+    bin2hex(tmp3, tmp1);
+    printf("hash: %s\n", tmp3);
+
+    reduce(n, tmp2, tmp1);
+    bin2hex(tmp3, tmp2);
+    printf("reduced hash: %s\n", tmp3);
+    hash(tmp1, tmp2, 1);
+    bin2hex(tmp3, tmp1);
+    printf("hash: %s\n", tmp3);
+
 
 
 

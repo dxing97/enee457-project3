@@ -30,13 +30,13 @@ struct table {
     int tablelength;
 };
 
-int import_table();
-int export_table();
+int import_table(struct table *table, char *filename);
+int export_table(struct table *table, char *filename);
 int generate_table(struct table *table, int n);
 int generate_chain(struct table *table, int n, struct table_entry *chain);
 int search_table(struct table *table, int n, char *plaintext, char *inputhash);
 int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location);
-int search_chain(struct table_entry *entry, int n, char *plaintext, char *hash);
+int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash);
 int reduce(int n, unsigned char *out, unsigned const char *hash);
 int generate_random_plaintext(int n, unsigned char *plaintext);
 int verify_plaintext(unsigned const char *plaintext, int n);
@@ -53,18 +53,20 @@ int import_table(struct table *table, char *filename) {
     for(int i = 0; i < table->tablelength; i++) {
 
         fread(buffer, 1, 32, fp);
-        hex2bin(buffer, table->entries[i].head);
+        hex2bin(table->entries[i].head, buffer);
 //        fread(table->entries[i].head, 1, 16, fp);
         if(fgetc(fp) != ',') {
             printf("expected comma, got something else\n");
         }
         fread(buffer, 1, 32, fp);
-        hex2bin(buffer, table->entries[i].tail);
+        hex2bin(table->entries[i].tail, buffer);
 //        fread(table->entries[i].tail, 1, 16, fp);
         if(fgetc(fp) != '\n') {
             printf("expected newline, got something else\n");
         }
     }
+
+    fclose(fp);
 
     return 0;
 }
@@ -93,7 +95,8 @@ int export_table(struct table *table, char *filename) {
 }
 
 int generate_table(struct table *table, int n) {
-    srand(time(NULL));
+    srand((unsigned int) (my_getrandom() + time(NULL)));
+    char tmp[33];
 
     int hashcount = 0, ret;
     struct table_entry *new_entry;
@@ -108,12 +111,16 @@ int generate_table(struct table *table, int n) {
         hashcount = generate_chain(table, n,
                 &(table->entries[table->tablelength]));
         if(hashcount == -1) {
-            printf("error generating new chain while generating table");
+            printf("generate_table: error generating new chain while generating table\n");
             return -1;
         }
+//        bin2hex(tmp, table->entries[table->tablelength].head);
+//        printf("head: %s\n", tmp);
         table->tablelength++;
-        if(table->tablelength % 128 == 0)
-            printf("tablelength: %d\n", table->tablelength);
+        if(table->tablelength % 64 == 0) {
+            printf("\rgenerate_table: progress %2.1f%%", (float) 100 * table->tablelength / (float) (1 << n/2));
+            fflush(stdout);
+        }
     }
 
     return hashcount;
@@ -126,47 +133,39 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
     unsigned char head[16], current[16], current_hash[16], tail[16];
     unsigned char tmp[33];
 
+
+
     generate_random_plaintext(n, current);
-    memcpy(head, current, 16);
+    memcpy(chain->head, current, 16);
 
-    bin2hex(tmp, head);
-//    printf("head: %s\n", tmp);
+//    bin2hex(tmp, current);
+//    printf("hede: %s\n", tmp);
 
-    while(chainlength < (1 <<n /2)) {
-        found = search_table_endpoints(table, n, current, NULL, NULL);
-        switch(found) {
+    verify_plaintext(current, n);
+
+    while(chainlength < (1 << n/2)) {
+        //no point checking for collisions
+//        found = search_table_endpoints(table, n, current, NULL, NULL);
+        switch(0) {
             case 1:
                 //collided with a head, stop the chain here?
             case 2:
                 //collided with a tail, stop the chain here?
-//                generate_random_plaintext(n, current);
-//                strcpy(head, current);
-//                chainlength = 0;
-//                break;
-//                printf("found repeated element in table");
-                if(repeated == 0)
-                    location = chainlength;
-                bin2hex(tmp, current);
-//                printf("repeated: %s\n", tmp);
-                repeated = 1;
             case 0:
                 hashcount = hash(current_hash, current, 1);
                 reduce(n, current, current_hash);
                 chainlength++;
                 break;
-
             default:
                 return -1;
-//                break;
         }
     }
 //    tail = current;
-
     bin2hex(tmp, current);
 //    printf("tail: %s\n", tmp);
-    if(repeated == 1)
+//    if(repeated == 1)
 //        printf("repeated at chainlength %d", location);
-    memcpy(chain->head, head, 16);
+//    memcpy(chain->head, head, 16);
     memcpy(chain->tail, current, 16);
 
     return hashcount;
@@ -193,12 +192,12 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
                 //search the chain
                 printf("found matching tail, searching chain\n");
                 if(!search_chain(&(table->entries[i]), n, final_plaintext, inputhash)) {
-                    printf("found password from chain at table index %d\n", i);
+                    printf("search_table: found password from chain at table index %d\n", i);
                     memcpy(plaintext, final_plaintext, 16);
                     return 0;
                 }
             case 1:
-                printf("found matching head\n");
+                printf("search_table: found matching head, ignoring\n");
             case 0:
             default:
                 break;
@@ -251,11 +250,27 @@ int search_table_endpoints(struct table *table, int n, unsigned const char *targ
 }
 
 /*
+ * given a hash and a table entry, find the plaintext that hashes to the target hash
  * returns 0 if a sucessful match was found
  * returns 1 if nothing was found
  */
-int search_chain(struct table_entry *entry, int n, char *plaintext, char *hash) {
-    return 0;
+int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash) {
+    char currenthash[16], currentplaintext[16];
+
+    memcpy(currentplaintext, entry->head, 16);
+    hash(currenthash, entry->head, 1);
+
+    for(int i = 0; i < 1 << n/2; i++) {
+        if(memcmp(currenthash, inhash, 16) == 0) {//matching hash
+            printf("found at chain position %d", i);
+            memcpy(plaintext, currentplaintext, 16);
+            return 0;
+        }
+        reduce(n, currentplaintext, currenthash);
+        hash(currenthash, currentplaintext, 1);
+    }
+    printf("search_chain: did not find matching hash in chain\n");
+    return 1;
 }
 /*
  * take the input hash and reduce it back into the password space
@@ -264,16 +279,25 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *hash) 
 int reduce(int n, unsigned char *out, unsigned const char *hash) {
     //naive approach: mod by 2^n
     memset(out, 0, 16);
+    for(int i = 0; i < 16 ; i++) {
+        if (i < 16 - n / 8) {
+            out[i] = 0;
+        } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
+            out[i] = hash[i]  & (unsigned char) 0x0F;
+        } else {
+            out[i] = hash[i];
 
-    for(int i = 16-n/8-1; i < 16; i++) {
-        out[i] = hash[i];
+        }
     }
-
-    int diff = n - (n/8)*8;
-    if(diff) {
-        out[15-n/8] = hash[15-n/8] & (unsigned char) (((1 << diff) - 1));
-
-    }
+//    for(int i = 16-n/8-1; i < 16; i++) {
+//        out[i] = hash[i];
+//    }
+//
+//    int diff = n - (n/8)*8;
+//    if(diff) {
+//        out[15-n/8] = hash[15-n/8] & (unsigned char) (((1 << diff) - 1));
+//
+//    }
 
     if(verify_plaintext(out, n)){
         printf("error with reduction function\n");
@@ -299,7 +323,7 @@ int new_reduce(struct table_entry *entry, int n, char *plaintext, char *hash, un
         } else { //even i
 
         }
-        plaintext[i] = (i % 2) ? () : (hash[o/2] () ? () : ());
+//        plaintext[i] = (i % 2) ? () : (hash[o/2] () ? () : ());
     }
 }
 
@@ -310,18 +334,17 @@ int new_reduce(struct table_entry *entry, int n, char *plaintext, char *hash, un
  */
 int generate_random_plaintext(int n, unsigned char *plaintext) {
     for(int i = 0; i < 16 ; i++) {
-        if (i < 16 - n / 8 - 1) {
+        if (i < 16 - n / 8) {
             plaintext[i] = 0;
+        } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
+            plaintext[i] = (unsigned char) rand() & (unsigned char) 0x0F;
         } else {
-            plaintext[i] = (unsigned char) my_getrandom();
+            plaintext[i] = (unsigned char) rand();
 
-        }
-        if((n/8)*8 != n) {
-            plaintext[16-n/8 - 1] %= 0x10;
         }
     }
     if(verify_plaintext(plaintext, n) != 0){
-        printf("error with random gen function\n");
+        printf("generate_random_plaintext: generated invalid plaintext\n");
     }
     return 0;
 }
@@ -331,21 +354,21 @@ int generate_random_plaintext(int n, unsigned char *plaintext) {
  * the first 128-n bits of plaintext must be 0
  */
 int verify_plaintext(unsigned const char *plaintext, int n) {
-    int tmp;
+    int res;
     if(n == 128) {
         return 0;
     }
-    for(int i = 0; i < 16-n/8-1; i++) {
+    for(int i = 0; i < 16-n/8; i++) {
         if(plaintext[i] != 0){
-            printf("invalid plaintext found!\n");
+            printf("verify_plaintext: invalid plaintext: %dth byte is nonzero\n", i);
             return 1;
         }
     }
     int diff = n - (n/8)*8;
-    if((n/8)*8 != n) {
-        int res = plaintext[15 - n/8] & ~((1 << (diff)) - 1);
+    if(n/4%2 == 1) {
+        res = plaintext[16 - n/8] & 0xF0;
         if(res != 0){
-            printf("invalid plaintext found!\n");
+            printf("verify_plaintext: invalid plaintext: most signinificant half of %dth byte is nonzero\n", 16-n/8);
             return 1;
         }
 
@@ -449,6 +472,8 @@ int my_getrandom()
     for(int i = bytes - 1; i >= 0; i--) {
         ret = ret + (buf[bytes - 1 - i] << i*8);
     }
+
+    fclose(fp);
     return ret;
 }
 
