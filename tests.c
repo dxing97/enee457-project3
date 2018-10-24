@@ -4,6 +4,14 @@
 #include <stdio.h>
 #include "project3.h"
 
+// _GNU_SOURCE should be set before *any* includes.
+// Alternatively, pass to compiler with -D, or enable GNU extensions
+// with -std=gnu11 (or omit -std completely)
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/syscall.h>
+
+
 
 /*
  * test a bunch of different functions in project3.h
@@ -47,6 +55,8 @@ int main(int argc, char *argv[]) {
     bin2hex(tmp1, tmp2);
 
     printf("reduced hash: %s\n", tmp1);
+
+    printf("my_getrandom: %d", my_getrandom());
 
 
 

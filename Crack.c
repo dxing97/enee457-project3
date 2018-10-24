@@ -1,7 +1,7 @@
 //
 // Created by Daniel Xing on 10/14/18.
 //
-
+//8de0bcffe587f63ed5c823dcf9bf5131
 #include "project3.h"
 //Crack n h(p)
 int main(int argc, char *argv[]){
@@ -25,17 +25,17 @@ int main(int argc, char *argv[]){
     import_table(&table, "rainbow");
 
     //import h(p), where h(p) is a ASCII-encoded hex string
-    char inputhash[16], outputpass[n/8+1], tmp[33];
+    char inputhash[16], outputpass[16], tmp[33];
     hex2bin(inputhash, argv[2]);
     bin2hex(tmp, inputhash);
     printf("hash: %s\n", tmp);
 
-    if(!search_table(&table, n, outputpass, inputhash)) {
+    if(search_table(&table, n, outputpass, inputhash)) {
         printf("could not find plaintext in rainbow table");
         return 0;
     }
-
-    printf("password: %s", outputpass);
+    bin2hex(tmp, outputpass);
+    printf("password: %s", tmp);
 
 
     return 0;

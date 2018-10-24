@@ -10,7 +10,10 @@
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
 #include <memory.h>
-
+#include <time.h>
+//#include <sys/random.h> //cryptographically secure randomness (not that it matters too much here)
+//#include <sys/syscall.h>
+//#include <unistd.h>
 /*
  * reduction function
  * todo: global/static EVP context to save exec time (might not be nessecary)
@@ -31,17 +34,38 @@ int import_table();
 int export_table();
 int generate_table(struct table *table, int n);
 int generate_chain(struct table *table, int n, struct table_entry *chain);
-int search_table(struct table *table, int n, char *plaintext, char *hash);
-int search_table_endpoints(struct table *table, int n, unsigned const char *target);
+int search_table(struct table *table, int n, char *plaintext, char *inputhash);
+int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location);
+int search_chain(struct table_entry *entry, int n, char *plaintext, char *hash);
 int reduce(int n, unsigned char *out, unsigned const char *hash);
 int generate_random_plaintext(int n, unsigned char *plaintext);
 int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
 int bin2hex(char *out, char *in);
 int hex2bin(char *out, char *in);
+int my_getrandom();
 
 int import_table(struct table *table, char *filename) {
-    
+    char buffer[512];
+    FILE *fp;
+    fp = fopen(filename, "r");
+
+    for(int i = 0; i < table->tablelength; i++) {
+
+        fread(buffer, 1, 32, fp);
+        hex2bin(buffer, table->entries[i].head);
+//        fread(table->entries[i].head, 1, 16, fp);
+        if(fgetc(fp) != ',') {
+            printf("expected comma, got something else\n");
+        }
+        fread(buffer, 1, 32, fp);
+        hex2bin(buffer, table->entries[i].tail);
+//        fread(table->entries[i].tail, 1, 16, fp);
+        if(fgetc(fp) != '\n') {
+            printf("expected newline, got something else\n");
+        }
+    }
+
     return 0;
 }
 
@@ -54,13 +78,13 @@ int export_table(struct table *table, char *filename) {
     fp = fopen(filename, "w");
 
     for(int i = 0; i < table->tablelength; i++) {
-//        bin2hex(buffer, table->entries[i].head);
-//        fwrite(buffer, 1, strlen(buffer), fp);
-        fwrite(table->entries[i].head, 1, 16, fp);
+        bin2hex(buffer, table->entries[i].head);
+        fwrite(buffer, 1, strlen(buffer), fp);
+//        fwrite(table->entries[i].head, 1, 16, fp);
         fputc(',', fp);
-//        bin2hex(buffer, table->entries[i].tail);
-//        fwrite(buffer, 1, strlen(buffer), fp);
-        fwrite(table->entries[i].tail, 1, 16, fp);
+        bin2hex(buffer, table->entries[i].tail);
+        fwrite(buffer, 1, strlen(buffer), fp);
+//        fwrite(table->entries[i].tail, 1, 16, fp);
         fputc('\n', fp);
     }
     fclose(fp);
@@ -69,6 +93,8 @@ int export_table(struct table *table, char *filename) {
 }
 
 int generate_table(struct table *table, int n) {
+    srand(time(NULL));
+
     int hashcount = 0, ret;
     struct table_entry *new_entry;
     table->tablelength = 0;
@@ -107,11 +133,12 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
 //    printf("head: %s\n", tmp);
 
     while(chainlength < (1 <<n /2)) {
-//        printf("chainlength: %d\n", chainlength);
-        found = search_table_endpoints(table, n, current);
+        found = search_table_endpoints(table, n, current, NULL, NULL);
         switch(found) {
             case 1:
+                //collided with a head, stop the chain here?
             case 2:
+                //collided with a tail, stop the chain here?
 //                generate_random_plaintext(n, current);
 //                strcpy(head, current);
 //                chainlength = 0;
@@ -138,7 +165,7 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
     bin2hex(tmp, current);
 //    printf("tail: %s\n", tmp);
     if(repeated == 1)
-        printf("repeated at chainlength %d", location);
+//        printf("repeated at chainlength %d", location);
     memcpy(chain->head, head, 16);
     memcpy(chain->tail, current, 16);
 
@@ -151,9 +178,34 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
  * if the plaintext hash of the password is found, save the plaintext in "plaintext" and return 0
  * otherwise, do not touch "plaintext" and return 1
  */
-int search_table(struct table *table, int n, char *plaintext, char *hash) {
+int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
+    int i, j, index, loc;
+    char current_hash[16], current_plaintext[16], final_plaintext[16], tmp[33];
+    memcpy(current_hash, inputhash, 16);
 
-    return 0;
+    for(i = 0; i < (1 << n/2); i++) {
+        reduce(n, current_plaintext, current_hash);
+        bin2hex(tmp, current_plaintext);
+//        printf("searching for %s\n", tmp);
+        j = search_table_endpoints(table, n, current_plaintext, &index, &loc);
+        switch(j) {
+            case 2: //found at tail
+                //search the chain
+                printf("found matching tail, searching chain\n");
+                if(!search_chain(&(table->entries[i]), n, final_plaintext, inputhash)) {
+                    printf("found password from chain at table index %d\n", i);
+                    memcpy(plaintext, final_plaintext, 16);
+                    return 0;
+                }
+            case 1:
+                printf("found matching head\n");
+            case 0:
+            default:
+                break;
+        }
+        hash(current_hash, current_plaintext, 1);
+    }
+    return 1;
 }
 
 /*
@@ -162,8 +214,10 @@ int search_table(struct table *table, int n, char *plaintext, char *hash) {
  * 0 - not found in table
  * 1 - found in head
  * 2 - found in tail
+ * index: if pointer is not null, sets it to index in table
+ * location: if pointer is not null, sets is to 0 (head) or 1 (tail)
  */
-int search_table_endpoints(struct table *table, int n, unsigned const char *target) {
+int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location) {
     char tmp1[33], tmp2[33];
     bin2hex(tmp2, target);
 
@@ -171,13 +225,25 @@ int search_table_endpoints(struct table *table, int n, unsigned const char *targ
         if(memcmp(target, table->entries[i].head, 128/8) == 0){
 //            bin2hex(tmp1, table->entries[i].head);
 //            printf("found duplicate of %s in %s at entry %d head\n", tmp2, tmp1, i);
-            printf("repeat at head pos %d", i);
+//            printf("repeat at head pos %d", i);
+            if(index != NULL) {
+                *index = i;
+            }
+            if(location != NULL) {
+                *location = 0;
+            }
             return 1;
         }
         if(memcmp(target, table->entries[i].tail, 128/8) == 0) {
 //            bin2hex(tmp1, table->entries[i].head);
 //            printf("found duplicate of %s in %s at entry %d tail\n", tmp2, tmp1, i);
-            printf("repeat at tail pos %d", i);
+//            printf("repeat at tail pos %d", i);
+            if(index != NULL) {
+                *index = i;
+            }
+            if(location != NULL) {
+                *location = 0;
+            }
             return 2;
         }
     }
@@ -185,8 +251,15 @@ int search_table_endpoints(struct table *table, int n, unsigned const char *targ
 }
 
 /*
+ * returns 0 if a sucessful match was found
+ * returns 1 if nothing was found
+ */
+int search_chain(struct table_entry *entry, int n, char *plaintext, char *hash) {
+    return 0;
+}
+/*
  * take the input hash and reduce it back into the password space
- * todo: fix problem here
+ * todo: add position-based reduction
  */
 int reduce(int n, unsigned char *out, unsigned const char *hash) {
     //naive approach: mod by 2^n
@@ -198,12 +271,7 @@ int reduce(int n, unsigned char *out, unsigned const char *hash) {
 
     int diff = n - (n/8)*8;
     if(diff) {
-        out[15-n/8] = hash[15-n/8] & (((1 << diff) - 1));
-//        int res = hash[15 - n/8] & ~((1 << (diff)) - 1);
-//        if(res != 0){
-//            printf("invalid plaintext found!\n");
-//            return 1;
-//        }
+        out[15-n/8] = hash[15-n/8] & (unsigned char) (((1 << diff) - 1));
 
     }
 
@@ -212,6 +280,27 @@ int reduce(int n, unsigned char *out, unsigned const char *hash) {
         return 2;
     }
     return 0;
+}
+
+int new_reduce(struct table_entry *entry, int n, char *plaintext, char *hash, unsigned int chainposition) {
+    int cp = 0, o; //current position and offset
+    srand(chainposition);
+    char extract;
+    for(int i = 0; i < n/4; i++) {
+        cp += ((rand() % n) / 4);
+
+        if(cp/4 % 2) { //extracting odd
+            extract = hash[cp/8] & (char) 0x0F;
+        } else { //extracting even
+            extract = hash[cp/8] >> 4;
+        }
+        if(i % 2) { //odd i
+
+        } else { //even i
+
+        }
+        plaintext[i] = (i % 2) ? () : (hash[o/2] () ? () : ());
+    }
 }
 
 
@@ -224,7 +313,7 @@ int generate_random_plaintext(int n, unsigned char *plaintext) {
         if (i < 16 - n / 8 - 1) {
             plaintext[i] = 0;
         } else {
-            plaintext[i] = (unsigned char) rand();
+            plaintext[i] = (unsigned char) my_getrandom();
 
         }
         if((n/8)*8 != n) {
@@ -309,13 +398,16 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 }
 
 /*
- * convert the 16 byte char array into a 33 byte ASCII hex array
+ * convert the 16 byte char/binary array into a 33 byte ASCII hex string
  */
 int bin2hex(char *out, char *in) {
     int i;
     for(i = 0; i < 32; i++) {
 //        out[i] = (i % 2 ? in[i/2] >> 4 : in[i/2] & (char) 0x0F);
-        sprintf(&out[i], "%X", (i % 2 ? in[i/2] & (char) 0x0F : in[i/2] >> 4 ));
+        unsigned char tmp = (unsigned char) (i % 2 ? in[i/2] & 0x0F : (in[i/2] >> 4) & 0x0F );
+        sprintf(&out[i], "%X", tmp);
+//        unsigned char tmp = (unsigned char) (i % 2 ? in[i/2] & 0b00001111 : in[i/2] >> 4 );
+//        printf("%X", tmp);
     }
     out[32] = '\0';
     return 0;
@@ -323,63 +415,41 @@ int bin2hex(char *out, char *in) {
 
 int hex2bin(char *out, char *in) {
     int i;
-    long k;
+    memset(out, 0, 16);
+    unsigned long k;
     if(strlen(in) != BUF_LENGTH*2) {
         printf("hex2bin: ASCII hex string has incorrect length (%d)", (int) (strlen(in)));
         return 1;
     }
 
     for (int j = 0; j < 32; j++) {
-        k = strtol( (char[]) {in[j], 0}, NULL, 16);
-        out[j/2] = (char) ((j % 2) ? (k) : (k << 4)); //if even or odd...
+        k = (unsigned) strtol( (char[]) {in[j], 0}, NULL, 16);
+//        printf("{%c%X",in[j], k);
+        out[j/2] = (unsigned char) ((j % 2) ? (k + out[j/2]) : (k << 4)); //if even or odd...
+//        if(j % 2 == 1) {
+//            printf("%X}", (unsigned char) out[j/2]);
+//        }
     }
 
     return 0;
 }
 
-int do_crypt(FILE *in, FILE *out, int do_encrypt)
+int my_getrandom()
 {
-    /* Allow enough space in output buffer for additional block */
-    unsigned char inbuf[1024], outbuf[1024 + EVP_MAX_BLOCK_LENGTH];
-    int inlen, outlen;
-    EVP_CIPHER_CTX *ctx;
-    /*
-     * Bogus key and IV: we'd normally set these from
-     * another source.
-     */
-    unsigned char key[] = "0123456789abcdEf";
-    unsigned char iv[] = "1234567887654321";
-
-    /* Don't set key or IV right away; we want to check lengths */
-    ctx = EVP_CIPHER_CTX_new();
-    EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), NULL, NULL, NULL,
-                      do_encrypt);
-    OPENSSL_assert(EVP_CIPHER_CTX_key_length(ctx) == 16);
-    OPENSSL_assert(EVP_CIPHER_CTX_iv_length(ctx) == 16);
-
-    /* Now we can set key and IV */
-    EVP_CipherInit_ex(ctx, NULL, NULL, key, iv, do_encrypt);
-
-    for (;;) {
-        inlen = (int) fread(inbuf, 1, 1024, in);
-        if (inlen <= 0)
-            break;
-        if (!EVP_CipherUpdate(ctx, outbuf, &outlen, inbuf, inlen)) {
-            /* Error */
-            EVP_CIPHER_CTX_free(ctx);
-            return 0;
-        }
-        fwrite(outbuf, 1, (size_t) outlen, out);
+    int bytes = 4; //int
+    char buf[bytes];
+    int ret = 0;
+    FILE *fp;
+    fp = fopen("/dev/urandom", "r");
+    if(fp == NULL) {
+        printf("could not open /dev/urandom for reading");
+        return 1;
     }
-    if (!EVP_CipherFinal_ex(ctx, outbuf, &outlen)) {
-        /* Error */
-        EVP_CIPHER_CTX_free(ctx);
-        return 0;
+    fread(buf, 1, (size_t) bytes, fp);
+    for(int i = bytes - 1; i >= 0; i--) {
+        ret = ret + (buf[bytes - 1 - i] << i*8);
     }
-    fwrite(outbuf, 1, (size_t) outlen, out);
-
-    EVP_CIPHER_CTX_free(ctx);
-    return 1;
+    return ret;
 }
 
 #endif //ENEE457_PROJECT3_PROJECT3_H
