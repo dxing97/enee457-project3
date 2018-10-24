@@ -41,7 +41,7 @@ int bin2hex(char *out, char *in);
 int hex2bin(char *out, char *in);
 
 int import_table(struct table *table, char *filename) {
-
+    
     return 0;
 }
 
@@ -63,6 +63,7 @@ int export_table(struct table *table, char *filename) {
         fwrite(table->entries[i].tail, 1, 16, fp);
         fputc('\n', fp);
     }
+    fclose(fp);
 
     return 0;
 }
