@@ -43,7 +43,8 @@ int main(int argc, char *argv[]) {
 //        printf("%s\n", tmp);
         if(memcmp(testhash, inputhash, 16) == 0) {
             bin2hex(tmp, password);
-            printf("\nfound plaintext: %s", tmp);
+            printf("\nfound plaintext: %s\n", tmp);
+            printf("total AES encryptions performed: %d\n", hash(NULL, NULL, -1));
             return 0;
         }
         if(i % 128 == 0) {

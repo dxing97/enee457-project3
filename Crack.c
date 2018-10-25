@@ -33,11 +33,15 @@ int main(int argc, char *argv[]){
     printf("hash: %s\n", tmp);
 
     if(search_table(&table, n, outputpass, inputhash)) {
-        printf("could not find plaintext in rainbow table");
+        printf("could not find plaintext in rainbow table\n");
+
+        printf("total AES encryptions done: %d", hash(NULL, NULL, -1));
         return 0;
     }
     bin2hex(tmp, outputpass);
-    printf("password: %s", tmp);
+    printf("password: %s\n", tmp);
+
+    printf("total AES encryptions done: %d", hash(NULL, NULL, -1));
 
 
     return 0;

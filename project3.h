@@ -9,7 +9,7 @@
 
 #define USE_RAINBOW_CHAIN
 //#define USE_MSB_REDUCTION
-//#define IGNORE_DUPLICATES
+#define IGNORE_DUPLICATES
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
@@ -23,6 +23,7 @@
  * todo: global/static EVP context to save exec time (might not be nessecary)
  */
 
+char testhash[16];
 
 struct table_entry {
     char head[16];
@@ -158,6 +159,10 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
                 //collided with a tail, stop the chain here?
             case 0:
                 hashcount = hash(current_hash, current, 1);
+                if(hashcount == -2) {
+                    bin2hex(tmp, current);
+                    printf("plaintext: %s\n", tmp);
+                }
 #ifndef USE_RAINBOW_CHAIN
                 reduce(n, current, current_hash, 0);
 #else
@@ -205,16 +210,17 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
 #ifndef USE_RAINBOW_CHAIN
         reduce(n, current_plaintext, current_hash, 0);
 #else
-        j = (1 << n/2);
+//todo: fix this
+        j = (1 << n/2) - i;
 //        tmp = j - i;
-        reduce(n, current_plaintext, inputhash, j - i);
+        reduce(n, current_plaintext, inputhash, j);
         for(j = (1 << n/2); j > (1 << n/2) - i; j--){
             hash(current_hash, current_plaintext, 1);
             reduce(n, current_plaintext, current_hash, j - i);
         }
 #endif
         bin2hex(tmp, current_plaintext);
-        printf("searching for %s\n", tmp);
+//        printf("searching for %s\n", tmp);
         j = search_table_endpoints(table, n, current_plaintext, &index, &loc);
         switch(j) {
             case 2: //found at tail
@@ -304,7 +310,7 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash
 #else
         reduce(n, currentplaintext, currenthash, i + 1);
 #endif
-        hash(currenthash, currentplaintext, 1);
+
     }
     printf("search_chain: did not find matching hash in chain\n");
     return 1;
@@ -352,13 +358,22 @@ int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex)
         new_reduce(n, out, hash, chainindex);
     }
 }
+
+int offset_is_duplicate(int offsets[], int len, int cp) {
+    for(int i = 0; i < len; i++) {
+        if(offsets[i] == cp) {
+            return 1;
+        }
+    }
+    return 0;
+}
 /*
  * chainindex: position in the rainbow chain we're reducing this hash for, starts at 1 and ends at 1 << n/2 (add one)
  * unique (hopefully) reduction function at every position in the chain
  */
 int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
     if(chainindex > (1 << n/2)) {
-        printf("new_reduce: chainindex (%d) is greater than 2^n/2 - 1 (%d)", chainindex, (1 << n/2) - 1);
+        printf("new_reduce: chainindex (%d) is greater than 2^n/2 - 1 (%d)\n", chainindex, (1 << n/2) - 1);
         return 1;
     }
 
@@ -371,8 +386,11 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
 
     for(int i = 0; i < n/4; i++) {
         cp = (rand() % 32);
+        while(offset_is_duplicate(offsets, i, cp) == 1) {
+            cp = (rand() % 32);
+        }
 //        cp = (cp + o) % 32;
-//        printf("%02d", cp);
+//        printf("%02d,", cp);
         offsets[i] = cp;
 
         if(cp % 2 == 1) { //extracting LSBs
@@ -501,6 +519,11 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 //    printf("result length plaintext bytes: %d\n", outlen);
 
     EVP_CIPHER_CTX_free(ctx);
+
+    if(memcmp(out, testhash, 16) == 0) {
+        printf("\nfound matching hash with 24 bit challenge\n");
+        return -2;
+    }
 
     hashcount++;
     return hashcount;
