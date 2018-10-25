@@ -14,3 +14,6 @@ target_link_libraries(Crack crypto)
 
 add_executable(test tests.c project3.h)
 target_link_libraries(test crypto)
+
+add_executable(bruteforce bruteforce.c project3.h)
+target_link_libraries(bruteforce crypto)
