@@ -1,0 +1,3 @@
+#cmakedefine USE_RAINBOW_CHAINS
+#cmakedefine USE_MSB_REDUCTION
+#cmakedefine IGNORE_DUPLICATES

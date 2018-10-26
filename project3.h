@@ -7,9 +7,9 @@
 
 #define BUF_LENGTH 16
 
-#define USE_RAINBOW_CHAIN
+//#define USE_RAINBOW_CHAINS
 //#define USE_MSB_REDUCTION
-#define IGNORE_DUPLICATES
+//#define IGNORE_DUPLICATES
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
@@ -38,13 +38,13 @@ struct table {
 int import_table(struct table *table, char *filename);
 int export_table(struct table *table, char *filename);
 int generate_table(struct table *table, int n);
-int generate_chain(struct table *table, int n, struct table_entry *chain);
+int generate_chain(int n, struct table_entry *chain, int tableindex);
 int search_table(struct table *table, int n, char *plaintext, char *inputhash);
 int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location);
 int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash);
 int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex);
 int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex);
-int generate_random_plaintext(int n, unsigned char *plaintext);
+int generate_random_plaintext(unsigned char *plaintext, int n);
 int verify_plaintext(unsigned const char *plaintext, int n);
 int hash(unsigned char *out, unsigned char *in, int do_encrypt);
 int bin2hex(char *out, char *in);
@@ -114,8 +114,8 @@ int generate_table(struct table *table, int n) {
     }
 
     while(table->tablelength < (1 << n/2)) {
-        hashcount = generate_chain(table, n,
-                &(table->entries[table->tablelength]));
+        hashcount = generate_chain(n,
+                                   &(table->entries[table->tablelength]), table->tablelength);
         if(hashcount == -1) {
             printf("generate_table: error generating new chain while generating table\n");
             return -1;
@@ -132,50 +132,41 @@ int generate_table(struct table *table, int n) {
     return hashcount;
 }
 
-int generate_chain(struct table *table, int n, struct table_entry *chain) {
+int generate_chain(int n, struct table_entry *chain, int tableindex) {
     int hashcount = -1, chainlength = 0;
     int found;
     int repeated = 0, location;
     unsigned char head[16], current[16], current_hash[16], tail[16];
-    unsigned char tmp[33];
+    unsigned char tmp[33], tmp1[33];
 
 
-
-    generate_random_plaintext(n, current);
+    generate_random_plaintext(current, n);
+//    hex2bin(current, "00000000000000000000000000C3A810");
     memcpy(chain->head, current, 16);
 
-//    bin2hex(tmp, current);
+    bin2hex(tmp1, current);
 //    printf("hede: %s\n", tmp);
 
     verify_plaintext(current, n);
 
     while(chainlength < (1 << n/2)) {
-        //no point checking for collisions
+//        no point checking for collisions
 //        found = search_table_endpoints(table, n, current, NULL, NULL);
-        switch(0) {
-            case 1:
-                //collided with a head, stop the chain here?
-            case 2:
-                //collided with a tail, stop the chain here?
-            case 0:
-                hashcount = hash(current_hash, current, 1);
-                if(hashcount == -2) {
-                    bin2hex(tmp, current);
-                    printf("plaintext: %s\n", tmp);
-                }
-#ifndef USE_RAINBOW_CHAIN
-                reduce(n, current, current_hash, 0);
+        hashcount = hash(current_hash, current, 1);
+        if(hashcount == -2) {
+            bin2hex(tmp, current);
+            printf("table index: %d, chain index: %d chain head: %s plaintext: %s\n",tableindex, chainlength, tmp1, tmp);
+        }
+#ifndef USE_RAINBOW_CHAINS
+        reduce(n, current, current_hash, 0);
 #else
-                reduce(n, current, current_hash, chainlength + 1);
+        reduce(n, current, current_hash, chainlength + 1);
 #endif
 //                bin2hex(tmp, current);
 //                printf("plaintext: %s\n", tmp);
 
-                chainlength++;
-                break;
-            default:
-                return -1;
-        }
+        chainlength++;
+
     }
 //    tail = current;
 //    bin2hex(tmp, current);
@@ -203,20 +194,17 @@ int generate_chain(struct table *table, int n, struct table_entry *chain) {
  */
 int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
     int i, j, index, loc;
-    char current_hash[16], current_plaintext[16], final_plaintext[16], tmp[33];
+    unsigned char current_hash[16], current_plaintext[16], final_plaintext[16], tmp[33];
     memcpy(current_hash, inputhash, 16);
 
     for(i = 0; i < (1 << n/2); i++) {
-#ifndef USE_RAINBOW_CHAIN
+#ifndef USE_RAINBOW_CHAINS
         reduce(n, current_plaintext, current_hash, 0);
 #else
-//todo: fix this
-        j = (1 << n/2) - i;
-//        tmp = j - i;
-        reduce(n, current_plaintext, inputhash, j);
-        for(j = (1 << n/2); j > (1 << n/2) - i; j--){
+        reduce(n, current_plaintext, inputhash, (1 << n/2) - i);
+        for(j = (1 << n/2) - i + 1; j <= (1 << n/2); j++){
             hash(current_hash, current_plaintext, 1);
-            reduce(n, current_plaintext, current_hash, j - i);
+            reduce(n, current_plaintext, current_hash, j);
         }
 #endif
         bin2hex(tmp, current_plaintext);
@@ -225,7 +213,11 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
         switch(j) {
             case 2: //found at tail
                 //search the chain
+#ifndef USE_RAINBOW_CHAINS
                 printf("search_table: plaintext %s at chain index %d matches tail at %d, searching chain\n", tmp, i, index);
+#else
+                printf("search_table: plaintext %s at chain index %d matches tail at %d, searching chain\n", tmp, (1 << n/2) - i - 1, index);
+#endif
                 if(!search_chain(&(table->entries[i]), n, final_plaintext, inputhash)) {
                     printf("search_table: found password from chain at table index %d\n", i);
                     memcpy(plaintext, final_plaintext, 16);
@@ -239,7 +231,7 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
             default:
                 break;
         }
-#ifndef USE_RAINBOW_CHAIN
+#ifndef USE_RAINBOW_CHAINS
         hash(current_hash, current_plaintext, 1);
 #endif
     }
@@ -305,11 +297,12 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash
             memcpy(plaintext, currentplaintext, 16);
             return 0;
         }
-#ifndef USE_RAINBOW_CHAIN
+#ifndef USE_RAINBOW_CHAINS
         reduce(n, currentplaintext, currenthash, 0);
 #else
         reduce(n, currentplaintext, currenthash, i + 1);
 #endif
+        hash(currenthash, currentplaintext, 1);
 
     }
     printf("search_chain: did not find matching hash in chain\n");
@@ -383,6 +376,7 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
     srand((unsigned) chainindex); //srand(0) is the same as srand(1)
     unsigned char extracts[n/4];
     int offsets[n/4];
+    char tmp1[33];
 
     for(int i = 0; i < n/4; i++) {
         cp = (rand() % 32);
@@ -403,21 +397,24 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
 //    printf("\n");
     int remainingextracts = n/4;
     for(int i = 0; i < 16 ; i++) {
-        if (i < 16 - n / 8) {
+        if (i < 16 - n / 8 - 1) {
             out[i] = 0;
-        } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
-            out[i] = (unsigned char) extracts[n/4-remainingextracts] & (unsigned char) 0x0F;
+        } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
+            out[i] = (unsigned char) extracts[n / 4 - remainingextracts] & (unsigned char) 0x0F;
             remainingextracts--;
+        } else if ((n/4)%2 == 0 && (i == 16-n/8-1)) {
+            out[i] = 0;
         } else {
             out[i] = (extracts[n/4 - remainingextracts] << 4) | extracts[n/4 - remainingextracts + 1];
             remainingextracts -= 2;
         }
     }
     if(remainingextracts != 0) {
-        printf("remainingextracts != 0\n");
+        printf("remainingextracts != 0 (%d\n", remainingextracts);
     }
     if(verify_plaintext(out, n) != 0) {
-        printf("new_reduce: generated invalid plaintext\n");
+        bin2hex(tmp1, out);
+        printf("new_reduce: generated invalid plaintext (%s for n = %d)\n", tmp1, n);
         return 1;
     }
     return 0;
@@ -428,7 +425,7 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
  * generate a BUF_LENGTH bit char array that satisfies the
  * requirements for the password
  */
-int generate_random_plaintext(int n, unsigned char *plaintext) {
+int generate_random_plaintext(unsigned char *plaintext, int n) {
     srand(my_getrandom());
     for(int i = 0; i < 16 ; i++) {
         if (i < 16 - n / 8) {
@@ -456,16 +453,16 @@ int verify_plaintext(unsigned const char *plaintext, int n) {
         return 0;
     }
     for(int i = 0; i < 16-n/8; i++) {
-        if(plaintext[i] != 0){
+        if(plaintext[i] != 0 && (n/4)%2 != 1){
             printf("verify_plaintext: invalid plaintext: %dth byte is nonzero\n", i);
             return 1;
         }
     }
-    int diff = n - (n/8)*8;
+//    int diff = n - (n/8)*8;
     if(n/4%2 == 1) {
-        res = plaintext[16 - n/8] & 0xF0;
+        res = plaintext[16 - n/8 - 1] & 0xF0;
         if(res != 0){
-            printf("verify_plaintext: invalid plaintext: most signinificant half of %dth byte is nonzero\n", 16-n/8);
+            printf("verify_plaintext: invalid plaintext: most signinificant half of %dth byte(= %d) is nonzero (res = %d)\n", 16-n/8, plaintext[16-n/8 - 1], res);
             return 1;
         }
 
@@ -521,7 +518,7 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
     EVP_CIPHER_CTX_free(ctx);
 
     if(memcmp(out, testhash, 16) == 0) {
-        printf("\nfound matching hash with 24 bit challenge\n");
+        printf("\nfound matching hash with testhash\n");
         return -2;
     }
 
