@@ -627,8 +627,8 @@ int hex2bin(char *out, char *in) {
         printf("hex2bin: ASCII hex string has incorrect length (%d)", (int) (strlen(in)));
         return 1;
     }
-
-    for (int j = 0; j < 32; j++) {
+    int j;
+    for (j = 0; j < 32; j++) {
         k = (unsigned) strtol( (char[]) {in[j], 0}, NULL, 16);
 //        printf("{%c%X",in[j], k);
         out[j/2] = (unsigned char) ((j % 2) ? (k + out[j/2]) : (k << 4)); //if even or odd...
