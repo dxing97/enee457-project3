@@ -7,9 +7,9 @@
 
 #define BUF_LENGTH 16
 
-//#define USE_RAINBOW_CHAINS
+#define USE_RAINBOW_CHAINS
 //#define USE_MSB_REDUCTION
-//#define IGNORE_DUPLICATES
+#define IGNORE_DUPLICATES
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
