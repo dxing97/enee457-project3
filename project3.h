@@ -7,7 +7,7 @@
 
 #define BUF_LENGTH 16
 
-#define USE_RAINBOW_CHAINS
+//#define USE_RAINBOW_CHAINS
 //#define USE_MSB_REDUCTION
 #define IGNORE_DUPLICATES
 #define SEARCH_WHILE_GENERATING
@@ -38,8 +38,8 @@ struct table {
     int tablelength;
 };
 
-int import_table(struct table *table, char *filename);
-int export_table(struct table *table, char *filename);
+int import_table(struct table *table, char *filename, int type);
+int export_table(struct table *table, char *filename, int type);
 int generate_table(struct table *table, int n);
 int generate_chain(int n, struct table_entry *chain, int tableindex);
 int search_table(struct table *table, int n, char *plaintext, char *inputhash);
@@ -54,26 +54,49 @@ int bin2hex(char *out, char *in);
 int hex2bin(char *out, char *in);
 int my_getrandom();
 
-int import_table(struct table *table, char *filename) {
+/*
+ * type 0: binary
+ * type 1: ASCII-encoded hex
+ */
+int import_table(struct table *table, char *filename, int type) {
     char buffer[512];
     FILE *fp;
     fp = fopen(filename, "r");
 
-    for(int i = 0; i < table->tablelength; i++) {
+    if(type == 1) {
+        for(int i = 0; i < table->tablelength; i++) {
 
-        fread(buffer, 1, 32, fp);
-        hex2bin(table->entries[i].head, buffer);
+            fread(buffer, 1, 32, fp);
+            hex2bin(table->entries[i].head, buffer);
 //        fread(table->entries[i].head, 1, 16, fp);
-        if(fgetc(fp) != ',') {
-            printf("expected comma, got something else\n");
-        }
-        fread(buffer, 1, 32, fp);
-        hex2bin(table->entries[i].tail, buffer);
+            if(fgetc(fp) != ',') {
+                printf("expected comma, got something else\n");
+            }
+            fread(buffer, 1, 32, fp);
+            hex2bin(table->entries[i].tail, buffer);
 //        fread(table->entries[i].tail, 1, 16, fp);
-        if(fgetc(fp) != '\n') {
-            printf("expected newline, got something else\n");
+            if(fgetc(fp) != '\n') {
+                printf("expected newline, got something else\n");
+            }
+        }
+    } else if (type == 0) {
+        for(int i = 0; i < table->tablelength; i++) {
+
+//            fread(buffer, 1, 32, fp);
+//            hex2bin(table->entries[i].head, buffer);
+            fread(table->entries[i].head, 1, 16, fp);
+            if(fgetc(fp) != ',') {
+                printf("expected comma, got something else\n");
+            }
+//            fread(buffer, 1, 32, fp);
+//            hex2bin(table->entries[i].tail, buffer);
+            fread(table->entries[i].tail, 1, 16, fp);
+            if(fgetc(fp) != '\n') {
+                printf("expected newline, got something else\n");
+            }
         }
     }
+
 
     fclose(fp);
 
@@ -82,22 +105,40 @@ int import_table(struct table *table, char *filename) {
 
 /*
  * save rainbow table to disk
+ *
+ * type 0: binary
+ * type 1: ASCII-encoded hex
+ *
  */
-int export_table(struct table *table, char *filename) {
+int export_table(struct table *table, char *filename, int type) {
     char buffer[512];
     FILE *fp;
     fp = fopen(filename, "w");
-
-    for(int i = 0; i < table->tablelength; i++) {
-        bin2hex(buffer, table->entries[i].head);
-        fwrite(buffer, 1, strlen(buffer), fp);
+    if(type == 1) {
+        for(int i = 0; i < table->tablelength; i++) {
+            bin2hex(buffer, table->entries[i].head);
+            fwrite(buffer, 1, strlen(buffer), fp);
 //        fwrite(table->entries[i].head, 1, 16, fp);
-        fputc(',', fp);
-        bin2hex(buffer, table->entries[i].tail);
-        fwrite(buffer, 1, strlen(buffer), fp);
+            fputc(',', fp);
+            bin2hex(buffer, table->entries[i].tail);
+            fwrite(buffer, 1, strlen(buffer), fp);
 //        fwrite(table->entries[i].tail, 1, 16, fp);
-        fputc('\n', fp);
+            fputc('\n', fp);
+        }
+    } else if (type == 0) {
+        for(int i = 0; i < table->tablelength; i++) {
+//            bin2hex(buffer, table->entries[i].head);
+//            fwrite(buffer, 1, strlen(buffer), fp);
+            fwrite(table->entries[i].head, 1, 16, fp);
+            fputc(',', fp);
+//            bin2hex(buffer, table->entries[i].tail);
+//            fwrite(buffer, 1, strlen(buffer), fp);
+            fwrite(table->entries[i].tail, 1, 16, fp);
+            fputc('\n', fp);
+        }
     }
+
+
     fclose(fp);
 
     return 0;
@@ -156,10 +197,12 @@ int generate_chain(int n, struct table_entry *chain, int tableindex) {
 //        no point checking for collisions
 //        found = search_table_endpoints(table, n, current, NULL, NULL);
         hashcount = hash(current_hash, current, 1);
+#ifdef SEARCH_WHILE_GENERATING
         if(hashcount == -2) {
             bin2hex(tmp, current);
             printf("table index: %d, chain index: %d chain head: %s plaintext: %s\n",tableindex, chainlength, tmp1, tmp);
         }
+#endif
 #ifndef USE_RAINBOW_CHAINS
         reduce(n, current, current_hash, 0);
 #else
@@ -320,16 +363,27 @@ int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex)
     if(chainindex == 0) {
         memset(out, 0, 16);
 #ifndef USE_MSB_REDUCTION
-        for (int i = 0; i < 16; i++) {
-            if (i < 16 - n / 8) {
+        for(int i = 0; i < 16 ; i++) {
+            if (i < 16 - n / 8 - 1) {
                 out[i] = 0;
-            } else if ((n / 4 % 2 == 1) && (i == 16 - n / 8)) {
+            } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
                 out[i] = hash[i] & (unsigned char) 0x0F;
+            } else if ((n/4)%2 == 0 && (i == 16-n/8-1)) {
+                out[i] = 0;
             } else {
                 out[i] = hash[i];
-
             }
         }
+//        for (int i = 0; i < 16; i++) {
+//            if (i < 16 - n / 8) {
+//                out[i] = 0;
+//            } else if ((n / 4 % 2 == 1) && (i == 16 - n / 8)) {
+//                out[i] = hash[i] & (unsigned char) 0x0F;
+//            } else {
+//                out[i] = hash[i];
+//
+//            }
+//        }
 #else
         for (int i = 0; i < 16; i++) {
             if (i < 16 - n / 8) {
@@ -430,16 +484,28 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
  */
 int generate_random_plaintext(unsigned char *plaintext, int n) {
     srand(my_getrandom());
-    for(int i = 0; i < 16 ; i++) {
-        if (i < 16 - n / 8) {
-            plaintext[i] = 0;
-        } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
-            plaintext[i] = (unsigned char) rand() & (unsigned char) 0x0F;
-        } else {
-            plaintext[i] = (unsigned char) rand();
 
+    for(int i = 0; i < 16 ; i++) {
+        if (i < 16 - n / 8 - 1) {
+            plaintext[i] = 0;
+        } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
+            plaintext[i] = (unsigned char) rand() & (unsigned char) 0x0F;
+        } else if ((n/4)%2 == 0 && (i == 16-n/8-1)) {
+            plaintext[i] = 0;
+        } else {
+            plaintext[i] = (unsigned char) rand() & (unsigned char) 0xFF;
         }
     }
+//    for(int i = 0; i < 16 ; i++) {
+//        if (i < 16 - n / 8) {
+//            plaintext[i] = 0;
+//        } else if ((n/4 % 2 == 1) && (i == 16-n/8)) {
+//            plaintext[i] = (unsigned char) rand() & (unsigned char) 0x0F;
+//        } else {
+//            plaintext[i] = (unsigned char) rand();
+//
+//        }
+//    }
     if(verify_plaintext(plaintext, n) != 0){
         printf("generate_random_plaintext: generated invalid plaintext\n");
     }

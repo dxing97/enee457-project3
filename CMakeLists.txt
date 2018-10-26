@@ -42,3 +42,6 @@ target_link_libraries(test ${LIBS})
 
 add_executable(bruteforce bruteforce.c ${STATIC_LIBS})
 target_link_libraries(bruteforce ${LIBS})
+
+add_executable(tableconvert ${STATIC_LIBS} tableconvert.c)
+target_link_libraries(tableconvert ${LIBS})
