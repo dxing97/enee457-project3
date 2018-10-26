@@ -18,7 +18,7 @@
  */
 int main(int argc, char *argv[]) {
     unsigned char tmp1[33], tmp2[33], tmp3[33], tmp4[44];
-    int n = 24;
+    int n = 24, i, j;
 
     generate_random_plaintext(tmp1, n);
     verify_plaintext(tmp1, n);
@@ -90,9 +90,9 @@ int main(int argc, char *argv[]) {
      */
     int tmp;
     int offsets[1<<n/2][n/4];
-    for(int i = 0; i < 1 << n/2; i++) {
+    for(i = 0; i < 1 << n/2; i++) {
         srand(i);
-        for(int j = 0; j < n/4; j++) {
+        for(j = 0; j < n/4; j++) {
             tmp = rand() % 32;
             offsets[i][j] = tmp;
 //            printf("%2d ", tmp);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     hex2bin(tmp2, password);
     hex2bin(chain[0], chainhead);
     printf("chainhead: %s\n", chainhead);
-    for(int i = 0; i < 1 << n/2; i++) {
+    for(i = 0; i < 1 << n/2; i++) {
         if(hash(tmp1, chain[i], 1) == -2) {
             printf("found challenge\n");
         }
