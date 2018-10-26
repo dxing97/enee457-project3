@@ -62,9 +62,10 @@ int import_table(struct table *table, char *filename, int type) {
     char buffer[512];
     FILE *fp;
     fp = fopen(filename, "r");
+    int i;
 
     if(type == 1) {
-        for(int i = 0; i < table->tablelength; i++) {
+        for(i = 0; i < table->tablelength; i++) {
 
             fread(buffer, 1, 32, fp);
             hex2bin(table->entries[i].head, buffer);
@@ -80,7 +81,7 @@ int import_table(struct table *table, char *filename, int type) {
             }
         }
     } else if (type == 0) {
-        for(int i = 0; i < table->tablelength; i++) {
+        for(i = 0; i < table->tablelength; i++) {
 
 //            fread(buffer, 1, 32, fp);
 //            hex2bin(table->entries[i].head, buffer);
@@ -114,8 +115,9 @@ int export_table(struct table *table, char *filename, int type) {
     char buffer[512];
     FILE *fp;
     fp = fopen(filename, "w");
+    int i;
     if(type == 1) {
-        for(int i = 0; i < table->tablelength; i++) {
+        for(i = 0; i < table->tablelength; i++) {
             bin2hex(buffer, table->entries[i].head);
             fwrite(buffer, 1, strlen(buffer), fp);
 //        fwrite(table->entries[i].head, 1, 16, fp);
@@ -126,7 +128,7 @@ int export_table(struct table *table, char *filename, int type) {
             fputc('\n', fp);
         }
     } else if (type == 0) {
-        for(int i = 0; i < table->tablelength; i++) {
+        for(i = 0; i < table->tablelength; i++) {
 //            bin2hex(buffer, table->entries[i].head);
 //            fwrite(buffer, 1, strlen(buffer), fp);
             fwrite(table->entries[i].head, 1, 16, fp);
@@ -296,8 +298,9 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
 int search_table_endpoints(struct table *table, int n, unsigned const char *target, int *index, int *location) {
     char tmp1[33], tmp2[33];
     bin2hex(tmp2, target);
+    int i;
 
-    for(int i = 0; i < table->tablelength; i++) {
+    for(i = 0; i < table->tablelength; i++) {
         if(memcmp(target, table->entries[i].head, 128/8) == 0){
 //            bin2hex(tmp1, table->entries[i].head);
 //            printf("found duplicate of %s in %s at entry %d head\n", tmp2, tmp1, i);
@@ -336,8 +339,9 @@ int search_chain(struct table_entry *entry, int n, char *plaintext, char *inhash
 
     memcpy(currentplaintext, entry->head, 16);
     hash(currenthash, entry->head, 1);
+    int i;
 
-    for(int i = 0; i < 1 << n/2; i++) {
+    for(i = 0; i < 1 << n/2; i++) {
         if(memcmp(currenthash, inhash, 16) == 0) {//matching hash
             printf("found at chain position %d", i);
             memcpy(plaintext, currentplaintext, 16);
@@ -363,7 +367,8 @@ int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex)
     if(chainindex == 0) {
         memset(out, 0, 16);
 #ifndef USE_MSB_REDUCTION
-        for(int i = 0; i < 16 ; i++) {
+        int i;
+        for(i = 0; i < 16 ; i++) {
             if (i < 16 - n / 8 - 1) {
                 out[i] = 0;
             } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
@@ -410,7 +415,8 @@ int reduce(int n, unsigned char *out, unsigned const char *hash, int chainindex)
 }
 
 int offset_is_duplicate(int offsets[], int len, int cp) {
-    for(int i = 0; i < len; i++) {
+    int i;
+    for(i = 0; i < len; i++) {
         if(offsets[i] == cp) {
             return 1;
         }
@@ -434,8 +440,8 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
     unsigned char extracts[n/4];
     int offsets[n/4];
     char tmp1[33];
-
-    for(int i = 0; i < n/4; i++) {
+    int i;
+    for(i = 0; i < n/4; i++) {
         cp = (rand() % 32);
         while(offset_is_duplicate(offsets, i, cp) == 1) {
             cp = (rand() % 32);
@@ -453,7 +459,7 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
     }
 //    printf("\n");
     int remainingextracts = n/4;
-    for(int i = 0; i < 16 ; i++) {
+    for(i = 0; i < 16 ; i++) {
         if (i < 16 - n / 8 - 1) {
             out[i] = 0;
         } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
@@ -484,8 +490,8 @@ int new_reduce(int n, unsigned char *out, unsigned char *hash, int chainindex) {
  */
 int generate_random_plaintext(unsigned char *plaintext, int n) {
     srand(my_getrandom());
-
-    for(int i = 0; i < 16 ; i++) {
+    int i;
+    for(i = 0; i < 16 ; i++) {
         if (i < 16 - n / 8 - 1) {
             plaintext[i] = 0;
         } else if (((n/4) % 2 == 1) && (i == 16-n/8 - 1)) {
@@ -517,11 +523,11 @@ int generate_random_plaintext(unsigned char *plaintext, int n) {
  * the first 128-n bits of plaintext must be 0
  */
 int verify_plaintext(unsigned const char *plaintext, int n) {
-    int res;
+    int res, i;
     if(n == 128) {
         return 0;
     }
-    for(int i = 0; i < 16-n/8; i++) {
+    for(i = 0; i < 16-n/8; i++) {
         if(plaintext[i] != 0 && (n/4)%2 != 1){
             printf("verify_plaintext: invalid plaintext: %dth byte is nonzero\n", i);
             return 1;
@@ -638,7 +644,7 @@ int my_getrandom()
 {
     int bytes = 4; //int
     char buf[bytes];
-    int ret = 0;
+    int ret = 0, i;
     FILE *fp;
     fp = fopen("/dev/urandom", "r");
     if(fp == NULL) {
@@ -646,7 +652,7 @@ int my_getrandom()
         return 1;
     }
     fread(buf, 1, (size_t) bytes, fp);
-    for(int i = bytes - 1; i >= 0; i--) {
+    for(i = bytes - 1; i >= 0; i--) {
         ret = ret + (buf[bytes - 1 - i] << i*8);
     }
 
