@@ -254,11 +254,9 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
         reduce(n, current_plaintext, current_hash, 0);
 #else
         reduce(n, current_plaintext, inputhash, (1 << n/2) - i);
-        printf("pj%d\n", (1 << n/2) - i);
         for(j = (1 << n/2) - i + 1; j <= (1 << n/2); j++){
             hash(current_hash, current_plaintext, 1);
             reduce(n, current_plaintext, current_hash, j);
-            printf("j%d\n", j);
         }
 #endif
         bin2hex(tmp, current_plaintext);
@@ -272,7 +270,7 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
 #else
                 printf("search_table: plaintext %s at chain index %d matches tail at %d, searching chain\n", tmp, (1 << n/2) - i - 1, index);
 #endif
-                if(!search_chain(&(table->entries[i]), n, final_plaintext, inputhash)) {
+                if(!search_chain(&(table->entries[index]), n, final_plaintext, inputhash)) {
                     printf("search_table: found password from chain at table index %d\n", i);
                     memcpy(plaintext, final_plaintext, 16);
                     return 0;
