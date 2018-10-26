@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
     printf("total AES encryptions done: %d\n", hash(NULL, NULL, -1));
 
-    if(export_table(&table, "rainbow", 0)) {
+    if(export_table(&table, "rainbow", 1)) {
         printf("could not export table to disk\n");
         return 1;
     }

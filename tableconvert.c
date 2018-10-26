@@ -21,7 +21,8 @@ int main(int argc, char *argv[]) {
     table.tablelength = 1 << n/2;
     table.entries = calloc( (1 << n/2), sizeof(struct table_entry));
 
-    import_table(&table, filename, 1);
-    export_table(&table, filename, 0);
-    return 0;
+    import_table(&table, filename, 0);
+    export_table(&table, "testrainbow", 1);
+//    import_table(&table, filename, 1);
+//    export_table(&table, "testrainbow", 0);
 }

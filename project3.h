@@ -59,7 +59,7 @@ int my_getrandom();
  * type 1: ASCII-encoded hex
  */
 int import_table(struct table *table, char *filename, int type) {
-    char buffer[512];
+    char buffer[512], tmp[33];
     FILE *fp;
     fp = fopen(filename, "r");
     int i;
@@ -85,16 +85,20 @@ int import_table(struct table *table, char *filename, int type) {
 
 //            fread(buffer, 1, 32, fp);
 //            hex2bin(table->entries[i].head, buffer);
-            fread(table->entries[i].head, 1, 16, fp);
+            fread(table->entries[i].head, 16, 1, fp);
+
             if(fgetc(fp) != ',') {
                 printf("expected comma, got something else\n");
             }
 //            fread(buffer, 1, 32, fp);
 //            hex2bin(table->entries[i].tail, buffer);
-            fread(table->entries[i].tail, 1, 16, fp);
+            fread(table->entries[i].tail, 16, 1, fp);
             if(fgetc(fp) != '\n') {
                 printf("expected newline, got something else\n");
             }
+            bin2hex(buffer, table->entries[i].head);
+            bin2hex(tmp, table->entries[i].tail);
+            printf("read in %s,%s\n", buffer, tmp);
         }
     }
 
@@ -131,11 +135,11 @@ int export_table(struct table *table, char *filename, int type) {
         for(i = 0; i < table->tablelength; i++) {
 //            bin2hex(buffer, table->entries[i].head);
 //            fwrite(buffer, 1, strlen(buffer), fp);
-            fwrite(table->entries[i].head, 1, 16, fp);
+            fwrite(table->entries[i].head, 16, 1, fp);
             fputc(',', fp);
 //            bin2hex(buffer, table->entries[i].tail);
 //            fwrite(buffer, 1, strlen(buffer), fp);
-            fwrite(table->entries[i].tail, 1, 16, fp);
+            fwrite(table->entries[i].tail, 16, 1, fp);
             fputc('\n', fp);
         }
     }
@@ -250,13 +254,15 @@ int search_table(struct table *table, int n, char *plaintext, char *inputhash) {
         reduce(n, current_plaintext, current_hash, 0);
 #else
         reduce(n, current_plaintext, inputhash, (1 << n/2) - i);
+        printf("pj%d\n", (1 << n/2) - i);
         for(j = (1 << n/2) - i + 1; j <= (1 << n/2); j++){
             hash(current_hash, current_plaintext, 1);
             reduce(n, current_plaintext, current_hash, j);
+            printf("j%d\n", j);
         }
 #endif
         bin2hex(tmp, current_plaintext);
-//        printf("searching for %s\n", tmp);
+        printf("searching for %s\n", tmp);
         j = search_table_endpoints(table, n, current_plaintext, &index, &loc);
         switch(j) {
             case 2: //found at tail

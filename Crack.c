@@ -24,7 +24,7 @@ int main(int argc, char *argv[]){
     struct table table;
     table.tablelength = 1 << n/2;
     table.entries = calloc((size_t) table.tablelength, sizeof(struct table_entry));
-    import_table(&table, "rainbow", 0);
+    import_table(&table, "rainbow", 1);
 
     //import h(p), where h(p) is a ASCII-encoded hex string
     char inputhash[16], outputpass[16], tmp[33];
