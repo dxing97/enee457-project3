@@ -121,24 +121,32 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    char chaintail[33];
-    bin2hex(chaintail, chain[(1 << n/2)]);
-    printf("chaintail: %s\n", chaintail);
+//    char chaintail[33];
+//    bin2hex(chaintail, chain[(1 << n/2)]);
+//    printf("chaintail: %s\n", chaintail);
+//
+//    bin2hex(tmp4, chain[(1 << n/2) ]);
+//    for (int i = 0; i < (1 << n/2); ++i) {
+//        reduce(n, tmp1, testhash, (1 << n/2) - i);
+//        for(int j = (1 << n/2) - i + 1; j <= (1 << n/2); j++) {
+//            hash(tmp2, tmp1, 1);
+//            reduce(n, tmp1, tmp2, j);
+//        }
+//        bin2hex(tmp3, tmp1);
+//        printf("comparing %s against %s\n", tmp3, chaintail);
+//        if(memcmp(tmp1, chain[(1 << n/2) ], 16) == 0) {
+//            printf("found plaintext in chain\n");
+//            return 0;
+//        }
+//    }
+    char testpass[33] = "00000000000000000000000000000ABC";
+    printf("strlen: %d\n", strlen(testpass));
+    hex2bin(tmp1, testpass);
+    hash(tmp2, tmp1, 1);
+    bin2hex(tmp1, tmp2);
+    printf("hash: %s\n", tmp1);
 
-    bin2hex(tmp4, chain[(1 << n/2) ]);
-    for (int i = 0; i < (1 << n/2); ++i) {
-        reduce(n, tmp1, testhash, (1 << n/2) - i);
-        for(int j = (1 << n/2) - i + 1; j <= (1 << n/2); j++) {
-            hash(tmp2, tmp1, 1);
-            reduce(n, tmp1, tmp2, j);
-        }
-        bin2hex(tmp3, tmp1);
-        printf("comparing %s against %s\n", tmp3, chaintail);
-        if(memcmp(tmp1, chain[(1 << n/2) ], 16) == 0) {
-            printf("found plaintext in chain\n");
-            return 0;
-        }
-    }
+
 
     return 0;
 }

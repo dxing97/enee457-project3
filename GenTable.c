@@ -35,7 +35,9 @@ int main(int argc, char *argv[]) {
     printf("n: %d table size (kbytes): %d\n", n,
             (int) sizeof(struct table_entry)*tablelen / 8);
 
+#ifdef SEARCH_WHILE_GENERATING
     hex2bin(testhash, "B8A1C2B0AFFBF389D6F0FC0584CCEFB2");
+#endif
 
     if(!generate_table(&table, n)) {
         printf("could not generate table\n");

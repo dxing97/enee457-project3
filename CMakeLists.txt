@@ -28,17 +28,17 @@ configure_file( ${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/config.h)
 
 
 
-set(STATIC_LIBS project3.h config.h)
+set(STATIC_LIBS project3.h)
 set(LIBS crypto)
 
-add_executable(GenTable GenTable.c project3.h ${STATIC_LIBS})
+add_executable(GenTable GenTable.c ${STATIC_LIBS})
 target_link_libraries(GenTable ${LIBS})
 
-add_executable(Crack Crack.c project3.h ${STATIC_LIBS})
+add_executable(Crack Crack.c ${STATIC_LIBS})
 target_link_libraries(Crack ${LIBS})
 
-add_executable(test tests.c project3.h ${STATIC_LIBS})
+add_executable(test tests.c ${STATIC_LIBS})
 target_link_libraries(test ${LIBS})
 
-add_executable(bruteforce bruteforce.c project3.h ${STATIC_LIBS})
+add_executable(bruteforce bruteforce.c ${STATIC_LIBS})
 target_link_libraries(bruteforce ${LIBS})

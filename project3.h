@@ -10,6 +10,7 @@
 #define USE_RAINBOW_CHAINS
 //#define USE_MSB_REDUCTION
 #define IGNORE_DUPLICATES
+#define SEARCH_WHILE_GENERATING
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
@@ -23,7 +24,9 @@
  * todo: global/static EVP context to save exec time (might not be nessecary)
  */
 
+#ifdef SEARCH_WHILE_GENERATING
 char testhash[16];
+#endif
 
 struct table_entry {
     char head[16];
@@ -517,10 +520,12 @@ int hash(unsigned char *out, unsigned char *in, int do_encrypt) {
 
     EVP_CIPHER_CTX_free(ctx);
 
+#ifdef SEARCH_WHILE_GENERATING
     if(memcmp(out, testhash, 16) == 0) {
         printf("\nfound matching hash with testhash\n");
         return -2;
     }
+#endif
 
     hashcount++;
     return hashcount;
