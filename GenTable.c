@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
             (int) sizeof(struct table_entry)*tablelen / 8);
 
 #ifdef SEARCH_WHILE_GENERATING
-    hex2bin(testhash, "8DE0BCFFE587F63ED5C823DCF9BF5131");
+    hex2bin(testhash, "970fc16e71b75463abafb3f8be939d1c");
 #endif
 
     if(!generate_table(&table, n)) {
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
     printf("total AES encryptions done: %d\n", hash(NULL, NULL, -1));
 
-    if(export_table(&table, "rainbow", 1)) {
+    if(export_table(&table, "rainbow", 0)) {
         printf("could not export table to disk\n");
         return 1;
     }
